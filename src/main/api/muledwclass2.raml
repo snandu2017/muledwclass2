@@ -1,0 +1,52 @@
+#%RAML 1.0
+title: muledwclass2
+version: 0.1
+
+
+/dwexamplesxmljson:
+  post:
+    description: Examples of Map operators
+    queryParameters: 
+      examplexml:
+    body:
+      application/xml:
+    responses:
+      200:
+        body:
+          application/json: !!null
+
+/dwexamplesioxml:
+  post:
+    description: Examples of Map operators
+    queryParameters: 
+      examplexml:
+    body:
+      application/xml:
+    responses:
+      200:
+        body:
+          application/xml: !!null
+          
+/dwexamplesiojson:
+  post:
+    description: Examples of Map operators
+    queryParameters: 
+      examplejson:
+    body:
+      application/json:
+    responses:
+      200:
+        body:
+          application/json: !!null
+          
+/dwexamplesjsonxml:
+  post:
+    description: Examples of Map operators
+    queryParameters: 
+      examplejson:
+    body:
+      application/json:
+    responses:
+      200:
+        body:
+          application/xml: !!null          

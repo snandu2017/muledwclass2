@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <flow name="jsonioinputflow">
+        <set-variable variableName="example" value="#[message.inboundProperties.'http.query.params'.examplejson]" doc:name="Variable"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.example == 'arraymap']">
+                <dw:transform-message doc:name="ArrayMap">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+//Ref Link: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#using-the-code-map-code-operator
+// Two examples are givev below 1st commented one uses $,$$ for value and keys whereas
+// 2nd uncommented one uses name value,index
+---
+//items: payload.books map {
+//      type: "book",
+//      price: $.price as :number,
+//      properties: {
+//        title: $.title,
+//        author: $.author,
+//        year: $.year as :number
+//      } 
+// }
+items: payload.books map (nextBook, nextIndex) -> {
+      type: "book",
+      price: nextBook.price as :number,
+      properties: {
+        title: nextBook.title,
+        author: nextBook.author,
+        year: nextBook.year as :number
+      }
+}
+]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <when expression="#[flowVars.example == 'renamekey']">
+                <dw:transform-message doc:name="RenameKey">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+// Ref Link: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#rename-keys-when-these-exist
+---
+payload.flights map (flight) -> {
+(flight mapObject (value, key) -> {
+    (emptySeats: value) when key as :string == 'availableSeats',
+    (airline: value) when key as :string == 'airlineName',
+    ((key):value) when (key as :string !='availableSeats') and (key as :string != 'airlineName')
+  })
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <when expression="#[flowVars.example == 'mergeinputs']">
+                <scatter-gather doc:name="Scatter-Gather">
+                    <dw:transform-message doc:name="Input1">
+                        <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+[
+  { "bookId":"101",
+    "title":"world history",
+    "year":"2017",
+    "isbn":"11111",
+    "price":"19.99"
+  },
+  {
+    "bookId":"202",
+    "title":"the great outdoors",
+    "year":"2016",
+    "isbn":"22222",
+    "price":"15.99"
+  }
+]]]></dw:set-payload>
+                    </dw:transform-message>
+                    <dw:transform-message doc:name="Input2">
+                        <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+[
+  {
+    "bookId":"101",
+    "author":"john doe"
+  },
+  {
+    "bookId":"202",
+    "author":"jane doe"
+  }
+]]]></dw:set-payload>
+                    </dw:transform-message>
+                </scatter-gather>
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+//Ref Link: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#merging-inputs
+---
+
+ payload[0] map using (id = $.bookId) {
+         bookId:                $.bookId,
+         title:                $.title,
+         year:                 $.year,
+         isbn:                 $.isbn,
+         price:                 $.price,
+         (payload[1] filter ($.*bookId contains id)  map {
+                 author:$.author
+     })
+  }]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	Error: "Incorrect passed in parameter"
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+
+     <logger message="Called the TestDataweave #[payload]" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>

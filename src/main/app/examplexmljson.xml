@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <flow name="xmljsoninputflow">
+        <set-variable variableName="example" value="#[message.inboundProperties.'http.query.params'.examplexml]" doc:name="Variable"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.example == 'simplemap']">
+                <dw:transform-message doc:name="SimpleMap">
+                	<dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+// Ref Link: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#basic-transformation
+---
+{
+        address1: payload.order.buyer.address,
+        city: payload.order.buyer.city,
+        country: payload.order.buyer.nationality,
+        email: payload.order.buyer.email,
+        name: payload.order.buyer.name,
+        postalCode: payload.order.buyer.postCode,
+        stateOrProvince: payload.order.buyer.state
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+			<when expression="#[flowVars.example == 'constdirectives']">
+                <dw:transform-message doc:name="ConstDirectives">
+                	<dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+%var baseUrl="http://alainn-cosmetics.cloudhub.io/api/v1.0/"
+%var urlPage="http://alainn-cosmetics.cloudhub.io/api/v1.0/items"
+%var pageIndex=0
+%var requestedPageSize=4
+%var fullUrl="http://alainn-cosmetics.cloudhub.io/api/v1.0/items"
+//Ref Link: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#using-constant-directives
+---
+using (pageSize = payload.getItemsResponse.PageInfo.pageSize) {
+     links: [
+        {
+            href: fullUrl,
+            rel : "self"
+        },
+        {
+            href: urlPage ++ "?pageIndex=" ++ (pageIndex + pageSize) ++ "&pageSize=" ++ requestedPageSize,
+            rel: "next"
+        },
+        ({
+            href: urlPage ++ "?pageIndex=" ++ (pageIndex - pageSize) ++ "&pageSize=" ++ requestedPageSize,
+            rel: "prev"
+        }) when (pageIndex > 0)
+     ],
+     collection: {
+        size: pageSize,
+        items: payload.getItemsResponse.*Item map {
+            id: $.id,
+            type: $.type,
+            name: $.name,
+            (summary: $.summary) when $.summary?,
+            (brand: $.brand) when $.brand?,
+            links: ($.images.*image map {
+                href: trim $,
+                rel: $.@type
+            }) + {
+                href: baseUrl ++ "/" ++ $.id,
+                rel: "self"
+            }
+        }
+     }
+}
+]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <dw:transform-message doc:name="ErrorMessage">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	Error: "Incorrect passed in parameter"
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+
+     <logger message="Called the TestDataweave #[payload]" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>

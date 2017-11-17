@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <flow name="jsonxmlinputflow">
+        <set-variable variableName="example" value="#[message.inboundProperties.'http.query.params'.examplejson]" doc:name="Variable"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.example == 'addattr']">
+                <dw:transform-message doc:name="AddAttr">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+//Ref Link: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#target-an-attribute
+---
+{
+	bookstore: { (payload map {
+		book: {
+			title @(lang:"en"): $.item.properties.title,
+			year: $.item.price,
+			($.item.properties.author map
+				author @(loc:"US"): $
+			)
+		}
+	}
+		
+	)
+		
+	}
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <when expression="#[flowVars.example == 'optfields']">
+                <dw:transform-message doc:name="Addoptfields">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+//Ref Link: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#adding-optional-fields-based-on-a-condition
+---
+users: {
+	(payload map {
+		user: {
+			name: $.name,
+			(insurance: $.insurance) when $.insurance?
+		}
+	})
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+                    <when expression="#[flowVars.example == 'mulinputs']">
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+payload]]></dw:set-payload>
+                    <dw:set-variable variableName="exchangeRate"><![CDATA[%dw 1.0
+%output application/json
+---
+{
+  "USD": [
+    {"currency": "EUR", "ratio":0.92},
+    {"currency": "ARS", "ratio":8.76},
+    {"currency": "GBP", "ratio":0.66}
+  ]
+}]]></dw:set-variable>
+                    <dw:set-variable variableName="filterParameter"><![CDATA[%dw 1.0
+%output application/json
+---
+{
+  "publishedAfter": 2004
+}]]></dw:set-variable>
+                </dw:transform-message>
+                <dw:transform-message doc:name="MulInputs">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+books: {
+  (payload filter $.item.properties.year > flowVars.filterParameter.publishedAfter map using (it = $.item, props = $.item.properties) {
+    book @(year: props.year): {
+      (flowVars.exchangeRate.USD map {
+        price @(currency: $.currency): $.ratio * it.price
+      }),
+      title: props.title,
+      authors: { (props.author map {
+        author: $
+      }) }
+    }
+  })
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+{
+	Error: "Incorrect passed in parameter"
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+
+     <logger message="Called the TestDataweave #[payload]" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>

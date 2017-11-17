@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <flow name="xmlioinputflow">
+        <set-variable variableName="example" value="#[message.inboundProperties.'http.query.params'.examplexml]" doc:name="Variable"/>
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.example == 'removekey']">
+                <dw:transform-message doc:name="RemoveKey">
+                    <dw:input-payload doc:sample="sample_data\empty.xml"/>
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+//Ref Link: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#remove-fields
+---
+users: {
+      (payload.users map {
+        user: {
+        personal_information: $.personal_information - "ssn",
+        login_information: $.login_information - "password"
+        }
+      })
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <when expression="#[flowVars.example == 'replace']">
+                <dw:transform-message doc:name="Replace">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+//Ref Lnk: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#replace-values
+---
+users: {
+      (payload.users map {
+        user: {
+        personal_information: $.personal_information mapObject {
+        	($$): $ unless $$ ~= "ssn" otherwise "****"
+        },
+        login_information: $.login_information mapObject {
+        	($$): $ unless $$ ~= "password" otherwise "****"
+        }
+        }
+      })
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+			<when expression="#[flowVars.example == 'math']">
+                <dw:transform-message doc:name="Math">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+%var tax=0.085
+%var discount=0.05
+//Ref Link: https://docs.mulesoft.com/mule-user-guide/v/3.8/dataweave-examples#perform-basic-math
+---
+invoice: {
+	header: payload.invoice.header,
+	items: { (payload.invoice.items.*item map {
+		item @(index:$$ + 1): {
+			description: $.description,
+			quantity: $.quantity,
+			unit_price: $.unit_price,
+			discount: (100*discount) as :number {format: "##"} ++ "%",
+			subtotal: $.quantity * $.unit_price *(1-discount)
+	}
+})},
+	totals: using (subtotal = payload.invoice.items reduce ((item,sum1=0) -> (item.quantity * item.unit_price * (1-discount)))) {
+		subtotal: subtotal,
+		tax: (tax * 100) as :number { format: "##.#" } ++ "%",
+		total: subtotal * (1+tax)
+}
+}
+]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/xml
+---
+{
+	Error: "Incorrect passed in parameter"
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+
+     <logger message="Called the TestDataweave #[payload]" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>
